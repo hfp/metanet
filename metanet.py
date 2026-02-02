@@ -8,7 +8,7 @@
 # SPDX-License-Identifier: BSD-3-Clause                                       #
 ###############################################################################
 #
-# pylint: disable=bare-except
+# pylint: disable=bare-except,invalid-name
 #
 """
 Metanet DNS Script: view, add, or remove DNS records.
