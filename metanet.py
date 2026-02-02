@@ -7,10 +7,18 @@
 # Further information: https://github.com/hfp/metanet/                        #
 # SPDX-License-Identifier: BSD-3-Clause                                       #
 ###############################################################################
+#
+# pylint: disable=bare-except
+#
+"""
+Metanet DNS Script: view, add, or remove DNS records.
+"""
+import argparse
+import sys
+
 from fake_useragent import UserAgent
 from bs4 import BeautifulSoup
 import mechanize
-import argparse
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(
@@ -53,27 +61,27 @@ if __name__ == "__main__":
     )
     args = argparser.parse_args()
 
-    domlst = args.domkey.split(".")
-    domain, sublen = ".".join(domlst[-2:]), len(domlst) - 2
-    subdom = ".".join(domlst[0:sublen]) if 0 < sublen else ""
+    DOMLST = args.domkey.split(".")
+    DOMAIN, SUBLEN = ".".join(DOMLST[-2:]), len(DOMLST) - 2
+    SUBDOM = ".".join(DOMLST[0:SUBLEN]) if 0 < SUBLEN else ""
 
-    key = args.domkey
-    type = args.type
-    if "ACME" == type:
-        type = "TXT"  # ACME is a pseudo-type
-        if not subdom and "view" != args.command:
-            subdom = "_acme-challenge"
-    if "MX" == type:
-        if "*" == subdom:
+    KEY = args.domkey
+    KIND = args.type
+    if "ACME" == KIND:
+        KIND = "TXT"  # ACME is a pseudo-type
+        if not SUBDOM and "view" != args.command:
+            SUBDOM = "_acme-challenge"
+    if "MX" == KIND:
+        if "*" == SUBDOM:
             print('ERROR: subdomain cannot be "*"!')
-            exit(1)
-    elif "NS" == type:
-        if subdom:
+            sys.exit(1)
+    elif "NS" == KIND:
+        if SUBDOM:
             print("ERROR: subdomain cannot be specified!")
-            exit(1)
-    elif "TXT" != type:  # should not happen
+            sys.exit(1)
+    elif "TXT" != KIND:  # should not happen
         print("ERROR: unknown record type!")
-        exit(1)
+        sys.exit(1)
 
     br = mechanize.Browser()
     # br.set_handle_robots(False)
@@ -88,72 +96,70 @@ if __name__ == "__main__":
     br.submit()
 
     br.follow_link(text="Domains")
-    br.follow_link(text=domain)
+    br.follow_link(text=DOMAIN)
 
-    dns = br.follow_link(text="DNS-Verwaltung")
-    content = BeautifulSoup(dns.read(), "html.parser")
+    br.follow_link(text="DNS-Verwaltung")
+    content = BeautifulSoup(br.response().read(), "html.parser")
     table = content.find("table", class_="table-dns-editor")
     try:
         br.follow_link(text="Änderungen verwerfen")
     except:  # noqa: E722
         pass
 
-    hit, error = False, ""
+    HIT, ERROR = False, ""
     print(  # show request being performed
-        f"{args.command.upper()} {type}: {key}"
+        f"{args.command.upper()} {KIND}: {KEY}"
         + (f" {args.value}..." if args.value else "...")
     )
     for row in table.find_all("tr"):
         curkey = row.find("th").text.strip()
-        if key == curkey or (not subdom and "view" == args.command):
+        if KEY == curkey or (not SUBDOM and "view" == args.command):
             cols = row.find_all("td")
-            if type == cols[1].text.strip():
+            if KIND == cols[1].text.strip():
                 curval = cols[2].text.strip(' "')
                 if "view" == args.command:
                     if not args.value or curval == args.value:
-                        print(f'{args.command.upper()} {type}: {curkey} = "{curval}"')
-                        hit = True
+                        print(f'{args.command.upper()} {KIND}: {curkey} = "{curval}"')
+                        HIT = True
                 elif "add" == args.command:
                     if args.value and curval != args.value:
                         try:
                             # select record type
                             br.select_form(nr=0)
-                            br["type"] = [type]
+                            br["type"] = [KIND]
                             br.submit()
                             # (sub-)domain and value
                             br.select_form(nr=0)
-                            if subdom:
-                                br["subDomain"] = subdom
+                            if SUBDOM:
+                                br["subDomain"] = SUBDOM
                             br["textValue"] = args.value
                             br.submit()
                             br.follow_link(text="Jetzt speichern")
-                            hit = True
+                            HIT = True
                         except:  # noqa: E722
-                            error = f"ERROR: failed to add {type}-record!"
+                            ERROR = f"ERROR: failed to add {KIND}-record!"
                             continue
-                        break
                     elif args.value:
                         print(f'Value "{curval}" already added.')
-                        break
-                    elif error:
-                        print(error)
-                        break
+                    elif ERROR:
+                        print(ERROR)
                     else:
                         print("ERROR: no value specified!")
-                        exit(1)
+                        sys.exit(1)
+                    break
                 elif "remove" == args.command:
                     if not args.value or curval == args.value:
                         try:
                             remove = cols[3].find("a", class_="delete")
                             br.open(remove["href"])
                             br.follow_link(text="Jetzt speichern")
-                            hit = True
+                            HIT = True
                         except:  # noqa: E722
-                            print(f"ERROR: failed to remove {type}-record!")
+                            print(f"ERROR: failed to remove {KIND}-record!")
                         break
                 else:  # should not happen
                     print("ERROR: unknown command!")
-                    exit(1)
+                    sys.exit(1)
     # warn if request did match any record
-    if not hit:
+    if not HIT:
         print("No action performed!")
