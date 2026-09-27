@@ -7,25 +7,35 @@ However, there is no API to automate editing DNS records. The script `metanet.py
 and thereby enables to control the DNS editor, i.e., allows to view, add, and remove DNS records (automation).
 
 ```text
-usage: Metanet DNS Script [-h] [-t [{NS,MX,TXT,ACME}]] uid pwd domkey [{view,add,remove}] [value]
+usage: Metanet DNS Script [-h] [--uid UID] [--pwd PWD] [-t [{NS,MX,TXT,ACME}]]
+                          domkey [{view,add,remove}] [value]
 
 View, add, or remove DNS records
 
 positional arguments:
-  uid                   User identification (number)
-  pwd                   Password
   domkey                DOMAIN.TLD, *.DOMAIN.TLD, or SUB.DOMAIN.TLD used as key
   {view,add,remove}     Operation applied
   value                 Value to be matched or added
 
 options:
   -h, --help            show this help message and exit
+  --uid UID             User identification (number), else METANET_UID or config file
+  --pwd PWD             Password, else METANET_PWD or config file
   -t, --type [{NS,MX,TXT,ACME}]
                         Kind of DNS record
 ```
 
-The script does not need to be configured. It takes the user ID and the corresponding password as positional arguments.
-For convenience, one can wrap `metanet.py` via Shell script:
+## Credentials
+
+The user ID and the password are taken from (first match wins):
+
+1. `--uid` and `--pwd`, or the user ID and the password as the first two arguments (previous usage).
+2. The environment variables `METANET_UID` and `METANET_PWD`.
+3. A config file with `METANET_UID=...` and `METANET_PWD=...` lines: `$METANET_CONF`, `/etc/metanet.conf`, or `~/.metanet.conf`.
+
+Arguments are visible to other users (`ps`) and end up in the Shell history. A config file (`chmod 600`) avoids this;
+the script warns if the file is accessible by group or others.
+Alternatively, one can wrap `metanet.py` via Shell script:
 
 ```bash
 #!/usr/bin/env bash
@@ -54,17 +64,17 @@ Since DNS-records are public, there is no actual need for the script.
 However, the **view** command exists for convenience and confirms accessing the Metanet account.
 
 ```bash
-metanet.sh py domain.com
+metanet.sh domain.com
 ```
 
 Above command lists all TXT-records of "domain.com". The given domain must be booked with the authenticated Metanet account.
 
 ## Add DNS records
 
-The **add** command can be specified to add a DNS-record.
+The **add** command can be specified to add a DNS-record. No other record of that name needs to exist.
 
 ```bash
-metanet.sh py domain.com add myvalue
+metanet.sh domain.com add myvalue
 ```
 
 ## Remove DNS records
@@ -72,10 +82,20 @@ metanet.sh py domain.com add myvalue
 The **remove** command can be specified to delete a DNS-record.
 
 ```bash
-metanet.sh py domain.com remove myvalue
+metanet.sh domain.com remove myvalue
 ```
 
 If a value is not given, all records for the given key will be deleted!
+
+## ACME challenges
+
+The pseudo-type ACME selects the TXT-record `_acme-challenge.DOMAIN.TLD` (or `_acme-challenge.SUB.DOMAIN.TLD`).
+A wildcard key maps to the domain itself, i.e., `*.domain.com` uses `_acme-challenge.domain.com`.
+
+```bash
+metanet.sh domain.com add -t ACME "$CERTBOT_VALIDATION"
+metanet.sh domain.com remove -t ACME "$CERTBOT_VALIDATION"
+```
 
 ## Edit DNS records
 
